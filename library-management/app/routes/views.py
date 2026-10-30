@@ -6,6 +6,7 @@ from app import store
 from app.models.book import Book
 from app.models.loan import Loan
 from app.models.member import Member
+from app.routes.members import _card_in_use
 
 views_bp = Blueprint("views", __name__)
 
@@ -41,12 +42,22 @@ def delete_book_page(book_id):
 
 @views_bp.route("/ui/members", methods=["GET", "POST"])
 def members_page():
+    error = None
     if request.method == "POST":
-        member_id = store.next_id("member")
-        member = Member(id=member_id, name=request.form["name"], email=request.form["email"])
-        store.members[member_id] = member
-        return redirect(url_for("views.members_page"))
-    return render_template("members.html", members=store.members.values())
+        card_number = request.form.get("card_number") or None
+        if _card_in_use(card_number):
+            error = "Card number already in use"
+        else:
+            member_id = store.next_id("member")
+            member = Member(
+                id=member_id,
+                name=request.form["name"],
+                email=request.form["email"],
+                card_number=card_number,
+            )
+            store.members[member_id] = member
+            return redirect(url_for("views.members_page"))
+    return render_template("members.html", members=store.members.values(), error=error)
 
 
 @views_bp.route("/ui/members/<int:member_id>/delete", methods=["POST"])
