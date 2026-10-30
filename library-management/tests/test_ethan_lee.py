@@ -83,3 +83,57 @@ def test_delete_missing_book_returns_404(client):
 
     assert response.status_code == 404
     assert response.get_json()["error"] == "Book not found"
+
+
+def _create_member(client, name="Ada Lovelace", email="ada@example.com"):
+    response = client.post("/members", json={"name": name, "email": email})
+    assert response.status_code == 201
+    return response.get_json()
+
+
+def test_create_member_persists_for_later_get(client):
+    created = _create_member(client)
+
+    fetched = client.get(f"/members/{created['id']}")
+
+    assert fetched.status_code == 200
+    member = fetched.get_json()
+    assert member["id"] == created["id"]
+    assert member["name"] == "Ada Lovelace"
+    assert member["email"] == "ada@example.com"
+    assert "membership_date" in member
+
+
+def test_update_member_name_is_visible_on_later_get(client):
+    created = _create_member(client)
+
+    updated = client.put(f"/members/{created['id']}", json={"name": "Ada King"})
+
+    assert updated.status_code == 200
+    body = updated.get_json()
+    assert body["name"] == "Ada King"
+    assert body["email"] == "ada@example.com"
+    fetched = client.get(f"/members/{created['id']}")
+    assert fetched.get_json()["name"] == "Ada King"
+
+
+def test_list_members_returns_each_created_member(client):
+    _create_member(client, name="Ada Lovelace", email="ada@example.com")
+    _create_member(client, name="Grace Hopper", email="grace@example.com")
+
+    response = client.get("/members")
+
+    assert response.status_code == 200
+    assert [member["name"] for member in response.get_json()] == ["Ada Lovelace", "Grace Hopper"]
+
+
+def test_get_and_delete_missing_member(client):
+    missing = client.get("/members/999")
+    assert missing.status_code == 404
+    assert missing.get_json()["error"] == "Member not found"
+
+    created = _create_member(client)
+    deleted = client.delete(f"/members/{created['id']}")
+    assert deleted.status_code == 204
+    assert client.get(f"/members/{created['id']}").status_code == 404
+    assert client.get("/members").get_json() == []
