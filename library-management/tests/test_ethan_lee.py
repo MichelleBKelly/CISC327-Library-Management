@@ -137,3 +137,55 @@ def test_get_and_delete_missing_member(client):
     assert deleted.status_code == 204
     assert client.get(f"/members/{created['id']}").status_code == 404
     assert client.get("/members").get_json() == []
+
+
+def test_members_can_be_searched_by_name(client):
+    _create_member(client, name="Ada Lovelace", email="ada@example.com")
+    _create_member(client, name="Grace Hopper", email="grace@example.com")
+
+    response = client.get("/members?search=grace")
+
+    assert response.status_code == 200
+    body = response.get_json()
+    assert [member["name"] for member in body] == ["Grace Hopper"]
+
+
+def test_member_can_be_found_by_library_card_number(client):
+    created = client.post("/members", json={
+        "name": "Ada Lovelace",
+        "email": "ada@example.com",
+        "card_number": "CARD-1001",
+    })
+    assert created.status_code == 201
+    assert created.get_json()["card_number"] == "CARD-1001"
+
+    found = client.get("/members?card_number=CARD-1001")
+    assert found.status_code == 200
+    assert [member["id"] for member in found.get_json()] == [created.get_json()["id"]]
+
+    missing = client.get("/members?card_number=CARD-9999")
+    assert missing.status_code == 200
+    assert missing.get_json() == []
+
+    fetched = client.get(f"/members/{created.get_json()['id']}")
+    assert fetched.get_json()["card_number"] == "CARD-1001"
+
+
+def test_duplicate_library_card_number_is_rejected(client):
+    first = {
+        "name": "Ada Lovelace",
+        "email": "ada@example.com",
+        "card_number": "CARD-1001",
+    }
+    second = {
+        "name": "Grace Hopper",
+        "email": "grace@example.com",
+        "card_number": "CARD-1001",
+    }
+    assert client.post("/members", json=first).status_code == 201
+
+    rejected = client.post("/members", json=second)
+
+    assert rejected.status_code == 409
+    assert rejected.get_json()["error"] == "Card number already in use"
+    assert len(client.get("/members").get_json()) == 1
