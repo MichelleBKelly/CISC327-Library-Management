@@ -67,3 +67,65 @@ def test_checkout_rejected_when_no_copies_remain(client):
 
     assert second_loan.status_code == 409
     assert client.get(f"/books/{book['id']}").get_json()["available_copies"] == 0
+
+
+def test_return_restores_available_copies_and_records_return_date(client):
+    book = _book(client, total_copies=1)
+    member = _member(client)
+    loan = client.post("/loans", json={"book_id": book["id"], "member_id": member["id"]}).get_json()
+
+    response = client.put(f"/loans/{loan['id']}/return")
+
+    assert response.status_code == 200
+    assert response.get_json()["return_date"] == date.today().isoformat()
+    assert client.get(f"/books/{book['id']}").get_json()["available_copies"] == 1
+
+
+def test_return_missing_loan_returns_404(client):
+    response = client.put("/loans/999/return")
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Loan not found"
+
+
+def test_returning_a_loan_twice_is_rejected(client):
+    book = _book(client)
+    member = _member(client)
+    loan = client.post("/loans", json={"book_id": book["id"], "member_id": member["id"]}).get_json()
+    assert client.put(f"/loans/{loan['id']}/return").status_code == 200
+
+    again = client.put(f"/loans/{loan['id']}/return")
+
+    assert again.status_code == 400
+    assert again.get_json()["error"] == "Loan already returned"
+
+
+def test_loans_can_be_filtered_by_book_id(client):
+    first = _book(client, title="Dune", isbn="1", total_copies=1)
+    second = _book(client, title="Neuromancer", isbn="2", total_copies=1)
+    member = _member(client)
+    client.post("/loans", json={"book_id": first["id"], "member_id": member["id"]})
+    client.post("/loans", json={"book_id": second["id"], "member_id": member["id"]})
+
+    response = client.get(f"/loans?book_id={second['id']}")
+
+    assert response.status_code == 200
+    loans = response.get_json()
+    assert len(loans) == 1
+    assert loans[0]["book_id"] == second["id"]
+
+
+def test_loans_can_be_filtered_by_member_id(client):
+    _book(client, title="Placeholder", isbn="0")
+    book = _book(client, title="Dune", isbn="1")
+    member = _member(client)
+    assert member["id"] != book["id"]
+    client.post("/loans", json={"book_id": book["id"], "member_id": member["id"]})
+
+    response = client.get(f"/loans?member_id={member['id']}")
+
+    assert response.status_code == 200
+    loans = response.get_json()
+    assert len(loans) == 1
+    assert loans[0]["member_id"] == member["id"]
+    assert loans[0]["book_id"] == book["id"]
