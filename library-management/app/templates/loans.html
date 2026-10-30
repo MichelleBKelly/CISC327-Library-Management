@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Loans</h1>
+{% if error %}<p>{{ error }}</p>{% endif %}
 <table>
   <tr>
     <th>ID</th><th>Book ID</th><th>Member ID</th><th>Loan Date</th><th>Due Date</th><th>Return Date</th><th></th>
