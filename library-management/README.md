@@ -34,7 +34,7 @@ app working without a REST client, and calls the same in-memory store.
 ## Entities
 
 - **Book**: `id, title, author, isbn, total_copies, available_copies`
-- **Member**: `id, name, email, membership_date`
+- **Member**: `id, name, email, membership_date, card_number`
 - **Loan**: `id, book_id, member_id, loan_date, due_date, return_date`
 
 ## JSON API Endpoints
@@ -46,8 +46,8 @@ app working without a REST client, and calls the same in-memory store.
 | GET | `/books/<id>` | Get one book |
 | PUT | `/books/<id>` | Update a book |
 | DELETE | `/books/<id>` | Delete a book |
-| GET | `/members` | List all members |
-| POST | `/members` | Create a member |
+| GET | `/members` | List members. Optional `search` matches the name, and optional `card_number` matches the library card. |
+| POST | `/members` | Create a member. Optional `card_number` is the library card number. A repeated card number returns 409. |
 | GET | `/members/<id>` | Get one member |
 | PUT | `/members/<id>` | Update a member |
 | DELETE | `/members/<id>` | Delete a member |
