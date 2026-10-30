@@ -1,5 +1,6 @@
 from datetime import date, timedelta
 
+from app import store
 from app.models.loan import LOAN_PERIOD_DAYS
 
 
@@ -129,3 +130,92 @@ def test_loans_can_be_filtered_by_member_id(client):
     assert len(loans) == 1
     assert loans[0]["member_id"] == member["id"]
     assert loans[0]["book_id"] == book["id"]
+
+
+def test_renew_extends_due_date_by_one_loan_period(client):
+    book = _book(client)
+    member = _member(client)
+    loan = client.post("/loans", json={"book_id": book["id"], "member_id": member["id"]}).get_json()
+
+    response = client.put(f"/loans/{loan['id']}/renew")
+
+    assert response.status_code == 200
+    expected = date.today() + timedelta(days=2 * LOAN_PERIOD_DAYS)
+    assert response.get_json()["due_date"] == expected.isoformat()
+
+
+def test_renew_returned_loan_is_rejected(client):
+    book = _book(client)
+    member = _member(client)
+    loan = client.post("/loans", json={"book_id": book["id"], "member_id": member["id"]}).get_json()
+    client.put(f"/loans/{loan['id']}/return")
+
+    response = client.put(f"/loans/{loan['id']}/renew")
+
+    assert response.status_code == 400
+    assert response.get_json()["error"] == "Loan already returned"
+
+
+def test_fine_is_zero_before_the_due_date(client):
+    book = _book(client)
+    member = _member(client)
+    loan = client.post("/loans", json={"book_id": book["id"], "member_id": member["id"]}).get_json()
+
+    response = client.get(f"/loans/{loan['id']}/fine")
+
+    assert response.status_code == 200
+    assert response.get_json()["loan_id"] == loan["id"]
+    assert response.get_json()["fine_amount"] == 0
+
+
+def test_returned_overdue_loan_fine_stops_at_the_return_date(client):
+    book = _book(client)
+    member = _member(client)
+    loan = client.post("/loans", json={"book_id": book["id"], "member_id": member["id"]}).get_json()
+    stored = store.loans[loan["id"]]
+    stored.due_date = date.today() - timedelta(days=4)
+    stored.return_date = date.today() - timedelta(days=2)
+
+    response = client.get(f"/loans/{loan['id']}/fine")
+
+    assert response.status_code == 200
+    # Two overdue days at $0.25, fixed when the book was returned.
+    assert response.get_json()["fine_amount"] == 0.5
+
+
+def test_member_can_place_a_hold_and_see_it_later(client):
+    book = _book(client)
+    member = _member(client)
+
+    created = client.post("/reservations", json={"book_id": book["id"], "member_id": member["id"]})
+
+    assert created.status_code == 201
+    body = created.get_json()
+    assert body["book_id"] == book["id"]
+    assert body["member_id"] == member["id"]
+    assert body["fulfilled"] is False
+    listed = client.get(f"/reservations?member_id={member['id']}")
+    assert listed.status_code == 200
+    assert [item["id"] for item in listed.get_json()] == [body["id"]]
+
+
+def test_reservation_for_missing_member_returns_404(client):
+    book = _book(client)
+
+    response = client.post("/reservations", json={"book_id": book["id"], "member_id": 999})
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Member not found"
+
+
+def test_checkout_is_rejected_when_another_member_is_waiting(client):
+    book = _book(client, total_copies=1)
+    waiting = _member(client, name="Ada Lovelace", email="ada@example.com")
+    other = _member(client, name="Grace Hopper", email="grace@example.com")
+    reserved = client.post("/reservations", json={"book_id": book["id"], "member_id": waiting["id"]})
+    assert reserved.status_code == 201
+
+    blocked = client.post("/loans", json={"book_id": book["id"], "member_id": other["id"]})
+
+    assert blocked.status_code == 409
+    assert client.get(f"/books/{book['id']}").get_json()["available_copies"] == 1
