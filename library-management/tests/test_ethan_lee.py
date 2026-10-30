@@ -44,3 +44,42 @@ def test_get_missing_book_returns_404(client):
 
     assert response.status_code == 404
     assert response.get_json()["error"] == "Book not found"
+
+
+def test_search_books_matches_title_or_author_ignoring_case(client):
+    _create_book(client, title="Dune", author="Frank Herbert", isbn="1")
+    _create_book(client, title="Neuromancer", author="William Gibson", isbn="2")
+
+    by_title = client.get("/books?search=dune")
+    by_author = client.get("/books?search=GIBSON")
+
+    assert by_title.status_code == 200
+    assert [book["title"] for book in by_title.get_json()] == ["Dune"]
+    assert by_author.status_code == 200
+    assert [book["title"] for book in by_author.get_json()] == ["Neuromancer"]
+
+
+def test_search_with_no_match_returns_empty_list(client):
+    _create_book(client)
+
+    response = client.get("/books?search=no-such-book")
+
+    assert response.status_code == 200
+    assert response.get_json() == []
+
+
+def test_delete_book_removes_it_from_later_reads(client):
+    created = _create_book(client)
+
+    deleted = client.delete(f"/books/{created['id']}")
+
+    assert deleted.status_code == 204
+    assert client.get(f"/books/{created['id']}").status_code == 404
+    assert client.get("/books").get_json() == []
+
+
+def test_delete_missing_book_returns_404(client):
+    response = client.delete("/books/404")
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Book not found"
