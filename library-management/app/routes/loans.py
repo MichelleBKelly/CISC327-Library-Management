@@ -10,35 +10,62 @@ FINE_PER_DAY = 0.25  # dollars charged per day overdue
 loans_bp = Blueprint("loans", __name__, url_prefix="/loans")
 
 
+def _unfulfilled_reservations(book_id):
+    waiting = [
+        reservation for reservation in store.reservations.values()
+        if reservation.book_id == book_id and not reservation.fulfilled
+    ]
+    waiting.sort(key=lambda reservation: (reservation.reservation_date, reservation.id))
+    return waiting
+
+
 @loans_bp.route("", methods=["GET"])
 def list_loans():
     results = list(store.loans.values())
     member_id = request.args.get("member_id", type=int)
     book_id = request.args.get("book_id", type=int)
     if member_id is not None:
-        results = [l for l in results if l.book_id == member_id]
+        results = [loan for loan in results if loan.member_id == member_id]
     if book_id is not None:
-        results = [l for l in results if l.book_id == book_id]
-    return jsonify([l.to_dict() for l in results])
+        results = [loan for loan in results if loan.book_id == book_id]
+    return jsonify([loan.to_dict() for loan in results])
+
+
+def perform_checkout(book_id, member_id):
+    """Check out one copy, or return (error_body, status_code)."""
+    book = store.books.get(book_id)
+    if book is None:
+        return None, ({"error": "Book not found"}, 404)
+    if store.members.get(member_id) is None:
+        return None, ({"error": "Member not found"}, 404)
+    if book.available_copies < 1:
+        return None, ({"error": "No copies available"}, 409)
+
+    waiting = _unfulfilled_reservations(book_id)
+    if waiting and waiting[0].member_id != member_id:
+        return None, ({"error": "Book is reserved for another member"}, 409)
+
+    book.available_copies -= 1
+    loan_id = store.next_id("loan")
+    loan = Loan(
+        id=loan_id,
+        book_id=book_id,
+        member_id=member_id,
+        due_date=Loan.default_due_date(),
+    )
+    store.loans[loan_id] = loan
+    if waiting and waiting[0].member_id == member_id:
+        waiting[0].fulfilled = True
+    return loan, None
 
 
 @loans_bp.route("", methods=["POST"])
 def checkout_book():
     data = request.get_json()
-    book = store.books.get(data["book_id"])
-    if book is None:
-        return jsonify({"error": "Book not found"}), 404
-
-    book.available_copies -= 1
-
-    loan_id = store.next_id("loan")
-    loan = Loan(
-        id=loan_id,
-        book_id=data["book_id"],
-        member_id=data["member_id"],
-        due_date=Loan.default_due_date(),
-    )
-    store.loans[loan_id] = loan
+    loan, error = perform_checkout(data["book_id"], data["member_id"])
+    if error is not None:
+        body, status = error
+        return jsonify(body), status
     return jsonify(loan.to_dict()), 201
 
 
@@ -64,6 +91,13 @@ def renew_loan(loan_id):
         return jsonify({"error": "Loan not found"}), 404
     if loan.return_date is not None:
         return jsonify({"error": "Loan already returned"}), 400
+
+    waiting_for_someone_else = [
+        reservation for reservation in _unfulfilled_reservations(loan.book_id)
+        if reservation.member_id != loan.member_id
+    ]
+    if waiting_for_someone_else:
+        return jsonify({"error": "Another member is waiting for this book"}), 409
 
     loan.due_date = loan.due_date + timedelta(days=LOAN_PERIOD_DAYS)
     return jsonify(loan.to_dict())

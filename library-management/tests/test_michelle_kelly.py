@@ -219,3 +219,31 @@ def test_checkout_is_rejected_when_another_member_is_waiting(client):
 
     assert blocked.status_code == 409
     assert client.get(f"/books/{book['id']}").get_json()["available_copies"] == 1
+
+
+def test_member_who_is_waiting_can_check_out_and_fulfill_the_hold(client):
+    book = _book(client, total_copies=1)
+    member = _member(client)
+    client.post("/reservations", json={"book_id": book["id"], "member_id": member["id"]})
+
+    response = client.post("/loans", json={"book_id": book["id"], "member_id": member["id"]})
+
+    assert response.status_code == 201
+    holds = client.get(f"/reservations?book_id={book['id']}").get_json()
+    assert holds[0]["fulfilled"] is True
+    assert client.get(f"/books/{book['id']}").get_json()["available_copies"] == 0
+
+
+def test_renew_is_rejected_when_another_member_is_waiting(client):
+    book = _book(client, total_copies=1)
+    borrower = _member(client, name="Ada Lovelace", email="ada@example.com")
+    waiting = _member(client, name="Grace Hopper", email="grace@example.com")
+    loan = client.post("/loans", json={"book_id": book["id"], "member_id": borrower["id"]}).get_json()
+    client.post("/reservations", json={"book_id": book["id"], "member_id": waiting["id"]})
+
+    response = client.put(f"/loans/{loan['id']}/renew")
+
+    assert response.status_code == 409
+    assert response.get_json()["error"] == "Another member is waiting for this book"
+    listed = client.get(f"/loans?book_id={book['id']}").get_json()
+    assert listed[0]["due_date"] == loan["due_date"]
