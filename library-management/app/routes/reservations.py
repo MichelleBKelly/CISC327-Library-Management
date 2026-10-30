@@ -40,8 +40,3 @@ def create_reservation():
     )
     store.reservations[reservation_id] = reservation
     return jsonify(reservation.to_dict()), 201
-
-    # NOTE: checkout_book() in loans.py does NOT check store.reservations before
-    # allowing a checkout. This means any member can check out a book that another
-    # member has reserved — the reservation is silently bypassed.
-    # This is an intentional bug for students to discover through testing.
