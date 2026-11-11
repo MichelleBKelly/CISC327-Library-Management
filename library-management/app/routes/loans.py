@@ -4,8 +4,10 @@ from flask import Blueprint, jsonify, request
 
 from app import store
 from app.models.loan import Loan, LOAN_PERIOD_DAYS
+from notification_service import send_notification
 
 FINE_PER_DAY = 0.25  # dollars charged per day overdue
+HOLD_AVAILABLE_SUBJECT = "Hold available"
 
 loans_bp = Blueprint("loans", __name__, url_prefix="/loans")
 
@@ -17,6 +19,29 @@ def _unfulfilled_reservations(book_id):
     ]
     waiting.sort(key=lambda reservation: (reservation.reservation_date, reservation.id))
     return waiting
+
+
+def _notify_next_hold(book):
+    """Notify the first waiting member that a returned copy is available.
+
+    The return itself always succeeds. This helper only reports whether a
+    hold-available notification was attempted and whether it was sent.
+    """
+    waiting = _unfulfilled_reservations(book.id)
+    if not waiting:
+        return {"hold_notified": False, "hold_notification_attempted": False}
+
+    next_hold = waiting[0]
+    member = store.members.get(next_hold.member_id)
+    if member is None:
+        return {"hold_notified": False, "hold_notification_attempted": False}
+
+    message = (
+        f"Hello {member.name}, your hold on \"{book.title}\" is available "
+        f"for pickup at Queen's City Library."
+    )
+    sent = send_notification(member.email, HOLD_AVAILABLE_SUBJECT, message)
+    return {"hold_notified": bool(sent), "hold_notification_attempted": True}
 
 
 @loans_bp.route("", methods=["GET"])
@@ -81,7 +106,9 @@ def return_book(loan_id):
     book = store.books.get(loan.book_id)
     book.available_copies += 1
 
-    return jsonify(loan.to_dict())
+    body = loan.to_dict()
+    body.update(_notify_next_hold(book))
+    return jsonify(body)
 
 
 @loans_bp.route("/<int:loan_id>/renew", methods=["PUT"])
