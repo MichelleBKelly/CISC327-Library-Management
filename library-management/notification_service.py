@@ -13,11 +13,6 @@ Examples of recipients in the supplied templates:
     Equipment rental: renter.email
     Inventory:        supplier.contact_email or a chosen staff address
 
-Light customization for this Library Management project:
-    Chosen event: hold-available (notify the next waiting member after a return)
-    Recipient:    member.email
-    Subject:      "Hold available"
-
 For application tests, stub send_notification to return True or False, or
 mock it to verify the recipient, subject, and message. Assert the resulting
 application behavior too. Patch the dependency where your application uses it.
