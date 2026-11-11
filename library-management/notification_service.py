@@ -1,27 +1,76 @@
-"""Simulated external notification service for the library project.
+"""Notification simulator Assignment 3.
 
-This module stands in for a real email/SMS provider. It makes no network
-calls and never sends real messages. Customize lightly for the project, but
-keep send_notification(recipient, subject, message) -> bool unchanged.
+Place this file beside run.py in your selected project folder, then use
+``import notification_service`` from application code.
+
+This module does not send real emails or make network calls. Successful
+notifications are stored in memory and disappear when Python exits. It is
+a teaching simulator for a single process, not a production delivery system.
+The application decides when to notify someone and how to handle failure.
+
+Light customization for the Library Management project:
+    Event: hold-available after a book return when another member is waiting
+    Recipient: member.email
+    Subject style: keep the app subject, optionally noted as [City Library]
+
+For application tests, stub send_notification to return True or False, or
+mock it to verify the recipient, subject, and message. Assert the resulting
+application behavior too. Patch the dependency where your application uses it.
+Use clear_notifications before and after tests that use the real simulator.
 """
 
-SENDER_NAME = "Queen's City Library"
 SUBJECT_PREFIX = "[City Library]"
 
+_notifications = []
 
-def send_notification(recipient, subject, message):
-    """Pretend to send a notification.
 
-    Returns True on simulated success and False on simulated failure.
-    An empty or clearly invalid recipient fails without raising.
+def is_service_available() -> bool:
+    """Return True for this local simulator.
+
+    Tests may stub this function to return False to simulate an outage.
+    No external service is contacted and no random failures are introduced.
     """
-    if not recipient or "@" not in str(recipient):
+    return True
+
+
+def send_notification(recipient: str, subject: str, message: str) -> bool:
+    """Record a simulated notification and return True on success.
+
+    Return False without recording anything if any argument is not a string,
+    is empty/whitespace-only, or the simulated service is unavailable.
+    A recipient is a nonempty string (for example, an email or staff label);
+    this simulator does not validate email addresses or actual deliverability.
+    Valid values are stored exactly as supplied. Repeated sends are recorded
+    separately. True means recorded by the simulator, not delivered by email.
+    """
+    if not all(isinstance(value, str) and value.strip()
+               for value in (recipient, subject, message)):
         return False
 
-    # Simulated delivery log for local debugging; tests replace this function.
-    print(
-        f"{SENDER_NAME} -> {recipient}\n"
-        f"Subject: {SUBJECT_PREFIX} {subject}\n"
-        f"{message}"
-    )
+    if not is_service_available():
+        return False
+
+    stored_subject = subject
+    if not subject.startswith(SUBJECT_PREFIX):
+        stored_subject = f"{SUBJECT_PREFIX} {subject}"
+
+    _notifications.append({
+        "recipient": recipient,
+        "subject": stored_subject,
+        "message": message,
+    })
     return True
+
+
+def get_notifications() -> list:
+    """Return all recorded notifications in sending order.
+
+    Return copies of the records so callers cannot modify the stored history.
+    Each record has recipient, subject, and message string fields.
+    """
+    return [notification.copy() for notification in _notifications]
+
+
+def clear_notifications() -> None:
+    """Remove all recorded notifications, for example between test cases."""
+    _notifications.clear()
