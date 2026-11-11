@@ -8,18 +8,21 @@ notifications are stored in memory and disappear when Python exits. It is
 a teaching simulator for a single process, not a production delivery system.
 The application decides when to notify someone and how to handle failure.
 
-Light customization for the Library Management project:
-    Event: hold-available after a book return when another member is waiting
-    Recipient: member.email
-    Subject style: keep the app subject, optionally noted as [City Library]
+Examples of recipients in the supplied templates:
+    Library:          member.email
+    Equipment rental: renter.email
+    Inventory:        supplier.contact_email or a chosen staff address
+
+Light customization for this Library Management project:
+    Chosen event: hold-available (notify the next waiting member after a return)
+    Recipient:    member.email
+    Subject:      "Hold available"
 
 For application tests, stub send_notification to return True or False, or
 mock it to verify the recipient, subject, and message. Assert the resulting
 application behavior too. Patch the dependency where your application uses it.
 Use clear_notifications before and after tests that use the real simulator.
 """
-
-SUBJECT_PREFIX = "[City Library]"
 
 _notifications = []
 
@@ -50,13 +53,9 @@ def send_notification(recipient: str, subject: str, message: str) -> bool:
     if not is_service_available():
         return False
 
-    stored_subject = subject
-    if not subject.startswith(SUBJECT_PREFIX):
-        stored_subject = f"{SUBJECT_PREFIX} {subject}"
-
     _notifications.append({
         "recipient": recipient,
-        "subject": stored_subject,
+        "subject": subject,
         "message": message,
     })
     return True
