@@ -29,7 +29,9 @@ Environment: Windows, Python 3.12.10, Flask 3.0.3, pytest 8.3.3, pytest-cov 7.0.
 | Ethan notification branch plus all six Member B tests | `python -m pytest -v` | Exit 0: **47 passed, 1 xfailed**. |
 | Ethan notification branch plus all six Member B tests | Same coverage command | Exit 0: **47 passed, 1 xfailed; 99.44%** app coverage, 358/360 statements. |
 
-`git diff --check` also passed. The initial sandboxed run emitted pytest cache permission warnings; the final full-suite and coverage runs used normal filesystem access and emitted no warnings. GitHub-hosted results must be checked separately; these numbers are local results.
+`git diff --check` also passed. The initial sandboxed run emitted pytest cache permission warnings; the final full-suite and coverage runs used normal filesystem access and emitted no warnings. These percentages are local results.
+
+Hosted CI was also inspected: https://github.com/MichelleBKelly/CISC327-Library-Management/actions/runs/43776873733 . Checkout, Python setup, and dependency installation succeeded; the test/coverage step failed with exit code 1. The run also warns that checkout v4 and setup-python v5 use deprecated Node 20 and are being run on Node 24; neither action failed. Hosted test logs were not downloaded, so the precise hosted test counts/percentage are not claimed here. PR #7 currently has no workflow on its branch because the CI PR remains separate and unmerged; its local validation is recorded above.
 
 The existing failure on main is `test_returned_overdue_loan_fine_stops_at_the_return_date`: actual fine 1.00 versus expected 0.50. Ethan's #5 marks this documented A2 defect as strict xfail. His UI tests also cover the previously uncovered view routes. The CI threshold was not weakened and the application defect was not changed. Remaining uncovered statements after Member B tests: missing-member notification guard (`app/routes/loans.py:37`) and card-update self-skip (`app/routes/members.py:14`).
 
@@ -39,7 +41,8 @@ The existing failure on main is `test_returned_overdue_loan_fine_stops_at_the_re
 - `d091878` — Run project tests and enforce 90 percent coverage in GitHub Actions (CI).
 - `6a89d40` — Test failed hold notification and return without a waiting member (tests).
 - `ce5768b` — Cover missing book member loan and reservation API errors (tests).
-- A further documentation commit adds this handoff report; obtain its hash with `git log -1 --oneline`.
+- `1fda03a` — Document Member B validation results and required PR merge order.
+- A final documentation commit records hosted CI status; obtain its hash with `git log -1 --oneline`.
 
 ## Required merge order and outstanding actions
 
