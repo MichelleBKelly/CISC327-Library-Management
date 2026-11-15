@@ -60,6 +60,48 @@ def test_return_with_hold_reports_failed_notification(client, monkeypatch):
     assert holds[0]["fulfilled"] is False
 
 
+def test_update_missing_book_returns_404(client):
+    response = client.put("/books/999", json={"title": "Dune Messiah"})
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Book not found"
+    assert client.get("/books").get_json() == []
+
+
+def test_update_and_delete_missing_member_return_404(client):
+    updated = client.put("/members/999", json={"name": "Ada King"})
+    deleted = client.delete("/members/999")
+
+    assert updated.status_code == 404
+    assert updated.get_json()["error"] == "Member not found"
+    assert deleted.status_code == 404
+    assert deleted.get_json()["error"] == "Member not found"
+    assert client.get("/members").get_json() == []
+
+
+def test_renew_and_fine_missing_loan_return_404(client):
+    renewed = client.put("/loans/999/renew")
+    fine = client.get("/loans/999/fine")
+
+    assert renewed.status_code == 404
+    assert renewed.get_json()["error"] == "Loan not found"
+    assert fine.status_code == 404
+    assert fine.get_json()["error"] == "Loan not found"
+    assert client.get("/loans").get_json() == []
+
+
+def test_reservation_for_missing_book_returns_404(client):
+    member = _member(client)
+
+    response = client.post("/reservations", json={
+        "book_id": 999, "member_id": member["id"],
+    })
+
+    assert response.status_code == 404
+    assert response.get_json()["error"] == "Book not found"
+    assert client.get("/reservations").get_json() == []
+
+
 def test_return_without_hold_sends_no_notification(client):
     """Returning without a waiting member must not contact the notifier."""
     book, loan = _checked_out_book(client)
