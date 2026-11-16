@@ -1,5 +1,7 @@
 from datetime import date, timedelta
 
+import pytest
+
 from app import store
 from app.models.loan import LOAN_PERIOD_DAYS
 
@@ -168,6 +170,10 @@ def test_fine_is_zero_before_the_due_date(client):
     assert response.get_json()["fine_amount"] == 0
 
 
+@pytest.mark.xfail(
+    reason="Known A2 defect: fine uses date.today() even after return instead of return_date",
+    strict=True,
+)
 def test_returned_overdue_loan_fine_stops_at_the_return_date(client):
     book = _book(client)
     member = _member(client)

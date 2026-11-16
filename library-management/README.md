@@ -52,7 +52,7 @@ app working without a REST client, and calls the same in-memory store.
 | PUT | `/members/<id>` | Update a member |
 | DELETE | `/members/<id>` | Delete a member |
 | POST | `/loans` | Check out a book (`book_id`, `member_id`). Fails with 404 if the book or member does not exist, and with 409 if no copies remain or another member is first in the hold queue. Checking out fulfills that member's hold. |
-| PUT | `/loans/<id>/return` | Return a loaned book |
+| PUT | `/loans/<id>/return` | Return a loaned book. If another member is waiting on a hold, the API attempts a simulated hold-available notification and includes `hold_notification_attempted` / `hold_notified` in the JSON response. A failed notification does not undo the return. |
 | PUT | `/loans/<id>/renew` | Extend the due date by 14 days. Fails with 409 when another member is waiting for the book. |
 | GET | `/loans/<id>/fine` | Report the overdue fine at $0.25 per day. A returned loan still calculates through today; that defect is documented in the group report. |
 | GET | `/loans?member_id=&book_id=` | Look up loans by member id, book id, or both |
